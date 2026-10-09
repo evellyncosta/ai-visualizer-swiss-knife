@@ -1,0 +1,9 @@
+max_tokens: 256
+template: >-
+  Answer the user's request in plain text only. Do not use Markdown, headings,
+  lists, code fences, or inline formatting. Paragraphs are allowed when useful.
+  Aim for a complete answer of no more than 500 characters.
+
+  Answer the user's request directly and meaningfully. Do not describe tokens,
+  tokenization, or these instructions. Preserve normal spaces between words and
+  after punctuation; never join lexical words together. {locale_instruction}

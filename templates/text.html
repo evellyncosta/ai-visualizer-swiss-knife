@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizar texto</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body data-generation-mode="text" data-title-key="textTitle">
+    <div class="container">
+        <div class="language-switcher" role="group" data-i18n-aria-label="languageLabel">
+            <button type="button" data-locale="pt-BR" aria-pressed="true">Português</button>
+            <button type="button" data-locale="en" aria-pressed="false">English</button>
+        </div>
+        <a class="back-link" href="{{ url_for('index') }}" data-i18n="backHome">← Voltar ao início</a>
+        <header class="header">
+            <h1 data-i18n="textTitle">Visualizar texto</h1>
+            <p data-i18n="textIntro">Faça uma pergunta ou dê uma instrução para explorar como uma resposta é construída token a token.</p>
+        </header>
+
+        <div class="chat-container">
+            <div class="message user-message">
+                <div class="message-content">
+                    <span class="prompt-label" data-i18n="tokenizedQuestion">Pergunta ou instrução tokenizada</span>
+                    <span id="prompt-tokens" class="prompt-text"></span>
+                </div>
+            </div>
+            <div class="message assistant-message">
+                <div class="message-content">
+                    <span class="prompt-label" data-i18n="tokenizedResponse">Resposta tokenizada</span>
+                    <div id="response-text" class="response-text"></div>
+                </div>
+            </div>
+        </div>
+
+        <section id="token-analysis" class="token-analysis" aria-live="polite">
+            <h2 data-i18n="nextToken">Próximo token</h2>
+            <p class="token-context"><span data-i18n="contextBefore">Contexto antes da escolha:</span> <code id="token-context"></code></p>
+            <table class="probability-table">
+                <thead><tr><th data-i18n="tokenColumn">Token</th><th data-i18n="probabilityColumn">Probabilidade</th></tr></thead>
+                <tbody id="probability-table-body"></tbody>
+            </table>
+            <p class="probability-note" data-i18n="textNote">Envie uma instrução para visualizar os candidatos de cada token da resposta.</p>
+        </section>
+
+        <div class="input-section">
+            <div class="input-container">
+                <textarea id="prompt-input" data-i18n-placeholder="textPlaceholder" placeholder="Ex.: Escreva uma mensagem de aniversário para meu pai" rows="4"></textarea>
+                <button id="generate-btn" onclick="generateResponse()" data-i18n="generateText">Gerar texto</button>
+            </div>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='i18n.js') }}"></script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

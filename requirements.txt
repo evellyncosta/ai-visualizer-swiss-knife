@@ -1,0 +1,6 @@
+flask==3.0.0
+flask-cors==4.0.0
+langchain-openai==1.6.2
+PyYAML==6.0.3
+python-dotenv>=1.1.0
+tiktoken>=0.7,<1

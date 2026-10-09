@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizador de Probabilidades</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body data-title-key="appTitle">
+    <div class="container">
+        <div class="language-switcher" role="group" data-i18n-aria-label="languageLabel">
+            <button type="button" data-locale="pt-BR" aria-pressed="true">Português</button>
+            <button type="button" data-locale="en" aria-pressed="false">English</button>
+        </div>
+        <header class="header">
+            <h1 data-i18n="appTitle">Visualizador de Probabilidades</h1>
+            <p data-i18n="homeIntro">Escolha como quer explorar a construção de texto por um modelo.</p>
+        </header>
+
+        <main class="mode-grid" data-i18n-aria-label="modesLabel">
+            <a class="mode-card" href="{{ url_for('token_visualizer') }}">
+                <h2 data-i18n="tokenMode">Visualizar token</h2>
+                <p data-i18n="tokenModeDescription">Observe a próxima palavra, seus tokens e as probabilidades de cada escolha.</p>
+                <span data-i18n="start">Começar →</span>
+            </a>
+            <a class="mode-card" href="{{ url_for('text_visualizer') }}">
+                <h2 data-i18n="textMode">Visualizar texto</h2>
+                <p data-i18n="textModeDescription">Veja uma resposta completa ser construída token a token.</p>
+                <span data-i18n="start">Começar →</span>
+            </a>
+            <a class="mode-card" href="{{ url_for('hallucination_path') }}">
+                <h2 data-i18n="hallucinationPathMode">Hallucination Path</h2>
+                <p data-i18n="hallucinationPathModeDescription">Escolha cada próximo token e veja caminhos plausíveis nascerem de uma premissa falsa.</p>
+                <span data-i18n="start">Começar →</span>
+            </a>
+        </main>
+    </div>
+    <script src="{{ url_for('static', filename='i18n.js') }}"></script>
+</body>
+</html>

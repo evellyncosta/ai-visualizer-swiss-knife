@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizar token</title>
+    <link rel="stylesheet" href="static/style.css">
+</head>
+<body data-generation-mode="word" data-title-key="tokenTitle">
+    <div class="container">
+        <div class="language-switcher" role="group" data-i18n-aria-label="languageLabel">
+            <button type="button" data-locale="pt-BR" aria-pressed="true">Português</button>
+            <button type="button" data-locale="en" aria-pressed="false">English</button>
+        </div>
+        <a class="back-link" href="index.html" data-i18n="backHome">← Voltar ao início</a>
+        <header class="header">
+            <h1 data-i18n="tokenTitle">Visualizar token</h1>
+            <p data-i18n="tokenIntro">Insira um contexto para observar como a próxima palavra é construída token a token.</p>
+        </header>
+
+        <div class="chat-container">
+            <div class="message user-message">
+                <div class="message-content">
+                    <span class="prompt-label" data-i18n="tokenizedContext">Contexto tokenizado</span>
+                    <span id="prompt-tokens" class="prompt-text"></span>
+                </div>
+            </div>
+            <div class="message assistant-message">
+                <div class="message-content">
+                    <div id="response-text" class="response-text"></div>
+                </div>
+            </div>
+        </div>
+
+        <section id="token-analysis" class="token-analysis" aria-live="polite">
+            <h2 data-i18n="nextToken">Próximo token</h2>
+            <p class="token-context"><span data-i18n="contextBefore">Contexto antes da escolha:</span> <code id="token-context"></code></p>
+            <table class="probability-table">
+                <thead><tr><th data-i18n="tokenColumn">Token</th><th data-i18n="probabilityColumn">Probabilidade</th></tr></thead>
+                <tbody id="probability-table-body"></tbody>
+            </table>
+            <p class="probability-note" data-i18n="tokenNote">Envie um contexto para visualizar os candidatos. A tabela mostra somente os tokens mais prováveis.</p>
+        </section>
+
+        <div class="input-section">
+            <div class="input-container">
+                <textarea id="prompt-input" data-i18n-placeholder="tokenPlaceholder" placeholder="Digite o contexto aqui..." rows="3"></textarea>
+                <button id="generate-btn" onclick="generateResponse()" data-i18n="generate">Gerar</button>
+            </div>
+        </div>
+    </div>
+    <script src="static/i18n.js"></script>
+    <script src="static/script-static.js"></script>
+</body>
+</html>

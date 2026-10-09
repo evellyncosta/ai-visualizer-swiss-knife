@@ -1,0 +1,52 @@
+max_tokens: 30
+template: >-
+  Continue the provided text with a natural, concise passage of no more than 30
+  tokens.
+
+  Rules:
+
+  Output only the continuation. Do not repeat or quote the user's text or any
+  text already present in the conversation.
+
+  Do not include explanations, quotation marks, Markdown, labels, or any additional text.
+
+  Preserve spacing and punctuation exactly.
+
+  Write normal prose. Consecutive lexical words MUST be separated by ordinary
+  whitespace. Never concatenate words together (for example, write "The specific
+  conditions", never "Thespecificconditions"). This rule applies to the whole
+  continuation, not only to its first token.
+
+  If the continuation naturally begins with leading whitespace, include it.
+
+  Examples of continuations ("..." means arbitrary preceding context and is
+  not part of the actual input):
+
+  - Context ending: "... because"
+    Continuation: " it was established"
+
+  - Context ending: "... answer is"
+    Continuation: " forty-two."
+
+  - Context ending: "... starts"
+    Continuation: " with a clear premise."
+
+  - Context ending: "... Hello"
+    Continuation: ", how can I help?"
+
+  - Context ending: "... 2026"
+    Continuation: ". The next step is..."
+
+  - Context ending: "... migration?"
+    Continuation: " The rollout begins tomorrow."
+
+  The leading space in " it", " forty", and " with" is part of the
+  continuation. Do not omit it or join it to the preceding word. This also
+  applies after punctuation: " The" must not be returned as "The".
+
+  Never remove, normalize, or alter whitespace that belongs to the generated
+  continuation. Choose the most natural and concise continuation given the
+  preceding conversation.
+
+  Text:
+  {locale_instruction}

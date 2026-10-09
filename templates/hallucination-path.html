@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hallucination Path</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body data-generation-mode="path" data-title-key="hallucinationPathTitle">
+    <div class="container path-container">
+        <div class="language-switcher" role="group" data-i18n-aria-label="languageLabel">
+            <button type="button" data-locale="pt-BR" aria-pressed="true">Português</button>
+            <button type="button" data-locale="en" aria-pressed="false">English</button>
+        </div>
+        <a class="back-link" href="{{ url_for('index') }}" data-i18n="backHome">← Voltar ao início</a>
+        <header class="header">
+            <h1 data-i18n="hallucinationPathTitle">Hallucination Path</h1>
+            <p data-i18n="hallucinationPathIntro">Comece com uma afirmação factual falsa e escolha, passo a passo, como o texto continua.</p>
+        </header>
+
+        <section class="path-guidance" aria-labelledby="path-guidance-title">
+            <h2 id="path-guidance-title" data-i18n="falsePremiseLabel">Afirmação factual falsa</h2>
+            <p data-i18n="hallucinationPathGuidance">Este experimento mostra continuações linguisticamente plausíveis, não uma verificação de fatos.</p>
+            <p class="path-warning" data-i18n="hallucinationPathWarning">Você deve fornecer uma premissa falsa ou enganosa. O sistema não confirma se ela é falsa.</p>
+        </section>
+
+        <section class="path-input-section">
+            <label for="path-prompt-input" data-i18n="falsePremiseLabel">Afirmação factual falsa</label>
+            <div class="input-container">
+                <textarea id="path-prompt-input" data-i18n-placeholder="hallucinationPathPlaceholder" placeholder="Ex.: A capital da Austrália é Sydney porque..." rows="3"></textarea>
+                <button id="path-start-btn" type="button" data-i18n="startPath">Iniciar caminho</button>
+            </div>
+        </section>
+
+        <section class="path-workspace" aria-live="polite">
+            <div class="path-panel">
+                <h2 data-i18n="activePath">Caminho ativo</h2>
+                <h3 id="active-premise-label" class="path-context-label">Premissa</h3>
+                <p id="active-premise-text" class="active-path-text" data-i18n="pathEmpty">Inicie com uma afirmação para ver o caminho aqui.</p>
+                <h3 id="active-response-label" class="path-context-label">Resposta do assistant</h3>
+                <p id="active-response-text" class="active-path-text">Escolha um token para revelar a resposta.</p>
+                <button id="finish-path-btn" class="secondary-button" type="button" disabled data-i18n="finishPath">Finalizar exploração</button>
+                <p id="path-status" class="path-status" aria-live="polite"></p>
+            </div>
+            <div class="path-panel">
+                <h2 data-i18n="nextTokenChoices">Escolha o próximo token</h2>
+                <div id="path-candidates" class="path-candidates"></div>
+            </div>
+        </section>
+
+        <section class="path-tree-panel" aria-labelledby="path-tree-title">
+            <h2 id="path-tree-title" data-i18n="pathTree">Árvore de caminhos</h2>
+            <p class="probability-note" data-i18n="pathTreeNote">Selecione um nó anterior para retomar esse ponto e criar outro ramo.</p>
+            <div id="path-tree" class="path-tree" role="tree" data-i18n-aria-label="pathTree"></div>
+        </section>
+
+        <section class="verification-panel" aria-labelledby="verification-section-title">
+            <h2 id="verification-section-title" data-i18n="verificationSectionTitle">Verificação de alucinação</h2>
+            <p data-i18n="verificationSectionDescription">Finalize a exploração para habilitar a verificação com fontes externas.</p>
+            <button id="verify-hallucination-btn" class="secondary-button" type="button" disabled data-i18n="verifyHallucination">Verificar alucinação</button>
+            <section id="verification-result" class="verification-result" aria-live="polite" hidden>
+                <h3 id="verification-title" class="path-context-label"></h3>
+                <p id="verification-reason"></p>
+                <ul id="verification-sources"></ul>
+                <p class="verification-note" data-i18n="verificationLimit">Esta é uma avaliação por LLM baseada em fontes externas.</p>
+            </section>
+        </section>
+    </div>
+    <script src="{{ url_for('static', filename='i18n.js') }}"></script>
+    <script src="{{ url_for('static', filename='hallucination-path.js') }}"></script>
+</body>
+</html>
