@@ -21,10 +21,7 @@
             <section class="image-input-section">
                 <label for="image-prompt-input" data-i18n="imagePromptLabel">Descrição da imagem</label>
                 <textarea id="image-prompt-input" rows="5" data-i18n-placeholder="imagePromptPlaceholder" placeholder="Ex.: Uma cidade futurista ao pôr do sol"></textarea>
-                <label class="image-capture-toggle" for="capture-steps-input">
-                    <input id="capture-steps-input" type="checkbox" />
-                    <span data-i18n="captureStepsLabel">Capturar etapas de denoising</span>
-                </label>
+                <button id="capture-steps-input" class="image-capture-toggle" type="button" aria-pressed="false" data-i18n="captureStepsLabel">Capturar etapas de denoising</button>
                 <div id="capture-settings" class="image-capture-settings" hidden>
                     <label for="capture-every-input" data-i18n="captureEveryLabel">Capturar a cada quantas etapas</label>
                     <input id="capture-every-input" type="number" min="1" step="1" value="10" inputmode="numeric" />
@@ -33,8 +30,13 @@
                 <p id="image-status" class="image-status" aria-live="polite"></p>
             </section>
             <section id="image-result-section" class="image-result-section" hidden aria-live="polite">
+                <p id="image-preview-label" class="image-preview-label" data-i18n="finalImageLabel">Imagem final</p>
                 <img id="generated-image" alt="" />
-                <button id="download-image-btn" type="button" class="secondary-button" data-i18n="downloadImage">Baixar imagem</button>
+                <button id="download-image-btn" type="button" class="secondary-button" data-i18n="downloadFinalImage">Baixar imagem final</button>
+                <section id="captured-frames-section" class="captured-frames-section" hidden aria-labelledby="captured-frames-title">
+                    <h2 id="captured-frames-title" data-i18n="capturedFramesTitle">Etapas de denoising</h2>
+                    <div id="captured-frames" class="captured-frames" role="list"></div>
+                </section>
             </section>
         </main>
     </div>

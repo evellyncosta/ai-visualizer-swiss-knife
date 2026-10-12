@@ -29,7 +29,12 @@
         captureEveryLabel: 'Capturar a cada quantas etapas',
         captureEveryInvalid: 'Informe um intervalo de captura positivo.',
         generatedImageAlt: 'Imagem gerada',
-        downloadImage: 'Baixar imagem',
+        finalImageLabel: 'Imagem final',
+        selectedDenoisingStep: 'Etapa de denoising {step} (timestep {timestep})',
+        capturedFramesTitle: 'Etapas de denoising',
+        denoisingStepLabel: 'Etapa {step}',
+        timestepLabel: 'Timestep {timestep}',
+        downloadFinalImage: 'Baixar imagem final',
     });
     Object.assign(translations.en, {
         imageVisualizerMode: 'Image Visualizer',
@@ -46,7 +51,12 @@
         captureEveryLabel: 'Capture every how many steps',
         captureEveryInvalid: 'Enter a positive capture interval.',
         generatedImageAlt: 'Generated image',
-        downloadImage: 'Download image',
+        finalImageLabel: 'Final image',
+        selectedDenoisingStep: 'Denoising step {step} (timestep {timestep})',
+        capturedFramesTitle: 'Denoising steps',
+        denoisingStepLabel: 'Step {step}',
+        timestepLabel: 'Timestep {timestep}',
+        downloadFinalImage: 'Download final image',
     });
     function normalizeLocale(value) { return SUPPORTED_LOCALES.has(value) ? value : DEFAULT_LOCALE; }
     function getLocale() { return normalizeLocale(localStorage.getItem(STORAGE_KEY)); }

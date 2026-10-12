@@ -1,5 +1,5 @@
 (() => {
-    let imageUrl = null;
+    let finalImageUrl = null;
     let imageMimeType = 'image/png';
     let capturedFrames = [];
     const promptInput = document.getElementById('image-prompt-input');
@@ -9,25 +9,38 @@
     const generateButton = document.getElementById('generate-image-btn');
     const status = document.getElementById('image-status');
     const resultSection = document.getElementById('image-result-section');
+    const previewLabel = document.getElementById('image-preview-label');
     const image = document.getElementById('generated-image');
     const downloadButton = document.getElementById('download-image-btn');
+    const capturedFramesSection = document.getElementById('captured-frames-section');
+    const capturedFramesContainer = document.getElementById('captured-frames');
     const t = (key) => window.i18n.t(key);
+    const interpolate = (key, values) => Object.entries(values).reduce(
+        (text, [name, value]) => text.replace(`{${name}}`, value), t(key),
+    );
 
     window.imageDenoisingCapture = {
         get frames() { return capturedFrames; },
     };
 
+    function captureEnabled() {
+        return captureStepsInput.getAttribute('aria-pressed') === 'true';
+    }
+
     function syncCaptureControls() {
-        const enabled = captureStepsInput.checked;
+        const enabled = captureEnabled();
         captureSettings.hidden = !enabled;
         captureEveryInput.disabled = !enabled;
     }
 
-    function clearImage() {
-        if (imageUrl) URL.revokeObjectURL(imageUrl);
-        imageUrl = null;
+    function clearResult() {
+        if (finalImageUrl) URL.revokeObjectURL(finalImageUrl);
+        capturedFrames.forEach((frame) => URL.revokeObjectURL(frame.url));
+        finalImageUrl = null;
         capturedFrames = [];
         image.removeAttribute('src');
+        capturedFramesContainer.replaceChildren();
+        capturedFramesSection.hidden = true;
         resultSection.hidden = true;
     }
 
@@ -36,13 +49,46 @@
         status.className = 'image-status image-status-error';
     }
 
-    function showImage(blob) {
+    function showPreview(url, label) {
+        image.src = url;
+        image.alt = label;
+        previewLabel.textContent = label;
+    }
+
+    function selectFrame(frame) {
+        showPreview(frame.url, interpolate('selectedDenoisingStep', frame));
+        capturedFrames.forEach((item) => {
+            item.button.setAttribute('aria-pressed', String(item === frame));
+        });
+    }
+
+    function appendFrame(frame) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'captured-frame';
+        button.setAttribute('role', 'listitem');
+        button.setAttribute('aria-pressed', 'false');
+        button.setAttribute('aria-label', interpolate('selectedDenoisingStep', frame));
+
+        const thumbnail = document.createElement('img');
+        thumbnail.src = frame.url;
+        thumbnail.alt = '';
+        const metadata = document.createElement('span');
+        metadata.className = 'captured-frame-metadata';
+        metadata.textContent = `${interpolate('denoisingStepLabel', frame)} · ${interpolate('timestepLabel', frame)}`;
+        button.appendChild(thumbnail);
+        button.appendChild(metadata);
+        button.addEventListener('click', () => selectFrame(frame));
+        frame.button = button;
+        capturedFramesContainer.appendChild(button);
+    }
+
+    function showFinalImage(blob) {
         if (!blob.type.startsWith('image/')) throw new Error('invalid_image');
-        clearImage();
+        clearResult();
         imageMimeType = blob.type;
-        imageUrl = URL.createObjectURL(blob);
-        image.src = imageUrl;
-        image.alt = t('generatedImageAlt');
+        finalImageUrl = URL.createObjectURL(blob);
+        showPreview(finalImageUrl, t('finalImageLabel'));
         resultSection.hidden = false;
     }
 
@@ -54,10 +100,24 @@
         return new Blob([bytes], { type: 'image/png' });
     }
 
+    function showCapture(capture) {
+        if (!Array.isArray(capture.captured_steps)) throw new Error('invalid_capture');
+        const finalBlob = pngBase64ToBlob(capture.final_image_png_base64);
+        const frames = capture.captured_steps.map((frame) => ({
+            step: frame.step,
+            timestep: frame.timestep,
+            blob: pngBase64ToBlob(frame.png_base64),
+        }));
+        showFinalImage(finalBlob);
+        capturedFrames = frames.map((frame) => ({ ...frame, url: URL.createObjectURL(frame.blob) }));
+        capturedFrames.forEach(appendFrame);
+        capturedFramesSection.hidden = capturedFrames.length === 0;
+    }
+
     async function generateImage() {
         const prompt = promptInput.value.trim();
         if (!prompt) return showError('imagePromptRequired');
-        const captureSteps = captureStepsInput.checked;
+        const captureSteps = captureEnabled();
         const captureEvery = Number(captureEveryInput.value);
         if (captureSteps && (!Number.isInteger(captureEvery) || captureEvery <= 0)) {
             return showError('captureEveryInvalid');
@@ -75,14 +135,8 @@
                 body: JSON.stringify(body),
             });
             if (!response.ok) throw new Error('image_generation_failed');
-            if (captureSteps) {
-                const capture = await response.json();
-                if (!Array.isArray(capture.captured_steps)) throw new Error('invalid_capture');
-                showImage(pngBase64ToBlob(capture.final_image_png_base64));
-                capturedFrames = capture.captured_steps;
-            } else {
-                showImage(await response.blob());
-            }
+            if (captureSteps) showCapture(await response.json());
+            else showFinalImage(await response.blob());
             status.textContent = '';
         } catch (_error) {
             showError('imageGenerationError');
@@ -92,10 +146,10 @@
     }
 
     function downloadImage() {
-        if (!imageUrl) return;
+        if (!finalImageUrl) return;
         const extension = imageMimeType === 'image/jpeg' ? 'jpg' : 'png';
         const link = document.createElement('a');
-        link.href = imageUrl;
+        link.href = finalImageUrl;
         link.download = `generated-image.${extension}`;
         document.body.appendChild(link);
         link.click();
@@ -103,8 +157,11 @@
     }
 
     syncCaptureControls();
-    captureStepsInput.addEventListener('change', syncCaptureControls);
+    captureStepsInput.addEventListener('click', () => {
+        captureStepsInput.setAttribute('aria-pressed', String(!captureEnabled()));
+        syncCaptureControls();
+    });
     generateButton.addEventListener('click', generateImage);
     downloadButton.addEventListener('click', downloadImage);
-    window.addEventListener('beforeunload', clearImage);
+    window.addEventListener('beforeunload', clearResult);
 })();
