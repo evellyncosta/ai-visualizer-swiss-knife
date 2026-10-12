@@ -27,11 +27,15 @@ For live token probability analysis with OpenAI:
    pip install -r requirements.txt
    ```
 
-3. **Configure OpenAI**
+3. **Configure OpenAI (and, optionally, the Image Visualizer)**
    ```bash
    cp .env.example .env
    ```
    Edit `.env` and set `OPENAI_API_KEY` to your OpenAI API key. This key stays on the server and is never entered in the browser.
+
+   To enable Image Visualizer, also set `HF_IMAGE_ENDPOINT_URL` to the deployed Hugging Face Inference Endpoint URL and, when required, `HF_TOKEN`. The server uses `huggingface_hub.InferenceClient.text_to_image()` and returns the generated image as PNG to the browser.
+
+   `HF_IMAGE_ENDPOINT_URL`, `HF_TOKEN`, and all provider credentials must remain in server environment configuration; never put them in browser JavaScript, static-site configuration, or client requests.
 
 4. **Run the Flask app**
    ```bash
@@ -50,6 +54,7 @@ For live token probability analysis with OpenAI:
 - **Responsive Design**: Works on desktop and mobile devices
 - **Demo Mode**: GitHub Pages deployment with sample data for demonstration
 - **Mode Selection**: Start at a home page and choose token visualization or complete-text visualization
+- **Image Visualizer**: Generate, display, and download a PNG or JPEG returned by a server-configured endpoint
 
 ## 🛠️ How It Works
 

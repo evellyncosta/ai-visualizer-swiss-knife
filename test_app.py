@@ -1,11 +1,14 @@
 import os
+import json
+from PIL import Image
 import shutil
 import tempfile
+import time
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import yaml
 
@@ -99,6 +102,7 @@ class GenerateRouteTests(TestCase):
         tokens = self.client.get("/tokens")
         text = self.client.get("/text")
         path = self.client.get("/hallucination-path")
+        image = self.client.get("/image-visualizer")
         phrase = self.client.get("/phrase")
 
         self.assertEqual(home.status_code, 200)
@@ -108,6 +112,8 @@ class GenerateRouteTests(TestCase):
         self.assertIn(b'href="/text"', home.data)
         self.assertIn(b"Hallucination Path", home.data)
         self.assertIn(b'href="/hallucination-path"', home.data)
+        self.assertIn(b"Image Visualizer", home.data)
+        self.assertIn(b'href="/image-visualizer"', home.data)
         self.assertEqual(tokens.status_code, 200)
         self.assertIn(b"Digite o contexto", tokens.data)
         self.assertNotIn(b"o gato subiu no", tokens.data)
@@ -119,6 +125,9 @@ class GenerateRouteTests(TestCase):
         self.assertIn(b"premissa falsa", path.data)
         self.assertIn(b'id="verify-hallucination-btn"', path.data)
         self.assertIn(b'href="/"', path.data)
+        self.assertEqual(image.status_code, 200)
+        self.assertIn(b'id="image-prompt-input"', image.data)
+        self.assertIn(b"image-visualizer.js", image.data)
         self.assertEqual(phrase.status_code, 302)
         self.assertIn("/text", phrase.headers["Location"])
 
@@ -157,7 +166,7 @@ class GenerateRouteTests(TestCase):
             response = self.client.post("/api/verify-hallucination", json={"prompt": prompt, "response": answer})
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json(), {"message": message, "sources": [{"title": "NASA", "url": "https://nasa.gov", "relation": "evidence", "retrieved_at": "2026-10-02"}]})
+        self.assertEqual(response.get_json(), {"message": message, "sources": [{"title": "NASA", "url": "https://nasa.gov", "relation": "evidence", "retrieved_at": time.strftime("%Y-%m-%d", time.gmtime())}]})
         openai.return_value.responses.create.assert_called_once_with(
             model=VERIFICATION_MODEL_NAME,
             tools=[{"type": "web_search"}],
@@ -612,3 +621,73 @@ class GenerateRouteTests(TestCase):
             response = self.client.post("/api/generate", json={"prompt": "Hello"})
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.get_json(), {"error": "OpenAI did not return a valid next word."})
+
+
+class ImageGenerationRouteTests(TestCase):
+    def setUp(self):
+        self.client = app.test_client()
+
+    def test_missing_configuration_is_safe(self):
+        with patch.dict(os.environ, {}, clear=True):
+            response = self.client.post("/api/generate-image", json={"prompt": "a private prompt"})
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.get_json(), {"error": "Image generation is not configured on the server."})
+
+    @patch("app.InferenceClient")
+    @patch("app.OpenAI")
+    @patch("app.ChatOpenAI")
+    def test_forwards_only_prompt_to_inference_client(self, chat_openai, openai, inference_client):
+        inference_client.return_value.text_to_image.return_value = Image.new("RGB", (1, 1), "red")
+        with patch.dict(os.environ, {"HF_IMAGE_ENDPOINT_URL": "https://images.internal/generate", "HF_TOKEN": "token"}, clear=True):
+            response = self.client.post("/api/generate-image", json={"prompt": "a fox"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "image/png")
+        self.assertTrue(response.data.startswith(b"\x89PNG"))
+        inference_client.assert_called_once_with(
+            model="https://images.internal/generate", token="token", timeout=30.0
+        )
+        inference_client.return_value.text_to_image.assert_called_once_with("a fox")
+        chat_openai.assert_not_called()
+        openai.assert_not_called()
+
+    @patch("app.InferenceClient")
+    def test_invalid_provider_results_are_rejected_without_secrets(self, inference_client):
+        secret = "HF_TOKEN=secret-token"
+        prompt = "PROMPT_MUST_NOT_APPEAR"
+        inference_client.return_value.text_to_image.return_value = object()
+        with self.assertLogs(app.logger, level="WARNING") as logs:
+            with patch.dict(os.environ, {"HF_IMAGE_ENDPOINT_URL": "https://private.example/image", "HF_TOKEN": secret}, clear=True):
+                response = self.client.post("/api/generate-image", json={"prompt": prompt})
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.get_json(), {"error": "Image provider returned an invalid response."})
+        record = "\n".join(logs.output)
+        self.assertNotIn(secret, record)
+        self.assertNotIn(prompt, record)
+        self.assertNotIn("private.example", record)
+
+    @patch("app.InferenceClient")
+    def test_timeout_is_sanitized(self, inference_client):
+        inference_client.return_value.text_to_image.side_effect = __import__("app").InferenceTimeoutError("timeout")
+        with patch.dict(os.environ, {"HF_IMAGE_ENDPOINT_URL": "https://images.internal/generate"}, clear=True):
+            response = self.client.post("/api/generate-image", json={"prompt": "a fox"})
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.get_json(), {"error": "Image generation is temporarily unavailable."})
+
+    @patch("app.InferenceClient")
+    def test_provider_rejection_is_sanitized(self, inference_client):
+        secret = "https://private.example/endpoint?token=secret"
+        inference_client.return_value.text_to_image.side_effect = __import__("app").HfHubHTTPError(secret)
+        with self.assertLogs(app.logger, level="WARNING") as logs:
+            with patch.dict(os.environ, {"HF_IMAGE_ENDPOINT_URL": "https://private.example/endpoint"}, clear=True):
+                response = self.client.post("/api/generate-image", json={"prompt": "private prompt"})
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.get_json(), {"error": "Image generation is temporarily unavailable."})
+        self.assertNotIn(secret, "\n".join(logs.output))
+
+    @patch("app.InferenceClient")
+    def test_rejects_non_image_results(self, inference_client):
+        with patch.dict(os.environ, {"HF_IMAGE_ENDPOINT_URL": "https://images.internal/generate"}, clear=True):
+            inference_client.return_value.text_to_image.return_value = "not an image"
+            response = self.client.post("/api/generate-image", json={"prompt": "a fox"})
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.get_json(), {"error": "Image provider returned an invalid response."})

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Visualizer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body data-title-key="imageVisualizerTitle">
+    <div class="container image-visualizer-container">
+        <div class="language-switcher" role="group" data-i18n-aria-label="languageLabel">
+            <button type="button" data-locale="pt-BR" aria-pressed="true">Português</button>
+            <button type="button" data-locale="en" aria-pressed="false">English</button>
+        </div>
+        <a class="back-link" href="{{ url_for('index') }}" data-i18n="backHome">← Voltar ao início</a>
+        <header class="header">
+            <h1 data-i18n="imageVisualizerTitle">Image Visualizer</h1>
+            <p data-i18n="imageVisualizerIntro">Descreva a imagem que deseja gerar.</p>
+        </header>
+        <main class="image-workspace">
+            <section class="image-input-section">
+                <label for="image-prompt-input" data-i18n="imagePromptLabel">Descrição da imagem</label>
+                <textarea id="image-prompt-input" rows="5" data-i18n-placeholder="imagePromptPlaceholder" placeholder="Ex.: Uma cidade futurista ao pôr do sol"></textarea>
+                <button id="generate-image-btn" type="button" data-i18n="generateImage">Gerar imagem</button>
+                <p id="image-status" class="image-status" aria-live="polite"></p>
+            </section>
+            <section id="image-result-section" class="image-result-section" hidden aria-live="polite">
+                <img id="generated-image" alt="" />
+                <button id="download-image-btn" type="button" class="secondary-button" data-i18n="downloadImage">Baixar imagem</button>
+            </section>
+        </main>
+    </div>
+    <script src="{{ url_for('static', filename='i18n.js') }}"></script>
+    <script src="{{ url_for('static', filename='image-visualizer.js') }}"></script>
+</body>
+</html>

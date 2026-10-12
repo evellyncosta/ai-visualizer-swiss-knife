@@ -1,5 +1,6 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, Response
 from flask_cors import CORS
+from io import BytesIO
 import os
 import math
 import re
@@ -7,6 +8,9 @@ import time
 import uuid
 import json
 from typing import Dict, List, Tuple
+from PIL import Image, UnidentifiedImageError
+from huggingface_hub import InferenceClient, InferenceTimeoutError
+from huggingface_hub.utils import HfHubHTTPError
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from openai import OpenAI
@@ -57,6 +61,86 @@ RUNTIME_ERROR_CODES = {
     "OpenAI did not return a valid path continuation.": "generated_path_invalid",
     "OpenAI did not return a verification message.": "verification_message_missing",
 }
+IMAGE_MAX_BYTES = 10 * 1024 * 1024
+IMAGE_TIMEOUT_SECONDS = 30
+IMAGE_MIME_TYPES = {"image/png": ".png", "image/jpeg": ".jpg"}
+
+
+class ImageGenerationError(RuntimeError):
+    """A safe, user-facing failure at the image provider boundary."""
+
+
+def get_image_endpoint_configuration() -> Tuple[str, str | None]:
+    endpoint = os.getenv("HF_IMAGE_ENDPOINT_URL", "").strip()
+    if not endpoint:
+        raise ImageGenerationError("Image generation is not configured on the server.")
+    token = os.getenv("HF_TOKEN", "").strip() or None
+    return endpoint, token
+
+
+def get_image_timeout_seconds() -> float:
+    try:
+        timeout = float(os.getenv("HF_IMAGE_TIMEOUT_SECONDS", IMAGE_TIMEOUT_SECONDS))
+    except ValueError as error:
+        raise ImageGenerationError("Image generation is not configured on the server.") from error
+    if timeout <= 0:
+        raise ImageGenerationError("Image generation is not configured on the server.")
+    return timeout
+
+
+def is_supported_image(image_bytes: bytes, mime_type: str) -> bool:
+    expected_format = "PNG" if mime_type == "image/png" else "JPEG"
+    try:
+        with Image.open(BytesIO(image_bytes)) as image:
+            if image.format != expected_format or image.width <= 0 or image.height <= 0:
+                return False
+            image.verify()
+    except (UnidentifiedImageError, OSError, SyntaxError, ValueError):
+        return False
+    return True
+
+
+def request_remote_image(prompt: str) -> Tuple[bytes, str]:
+    endpoint, token = get_image_endpoint_configuration()
+    try:
+        client = InferenceClient(
+            model=endpoint,
+            token=token,
+            timeout=get_image_timeout_seconds(),
+        )
+        generated_image = client.text_to_image(prompt)
+    except (InferenceTimeoutError, HfHubHTTPError, TimeoutError, OSError) as error:
+        raise ImageGenerationError("Image generation is temporarily unavailable.") from error
+    if not isinstance(generated_image, Image.Image):
+        raise ImageGenerationError("Image provider returned an invalid response.")
+    try:
+        output = BytesIO()
+        generated_image.save(output, format="PNG")
+        image_bytes = output.getvalue()
+    except (OSError, ValueError) as error:
+        raise ImageGenerationError("Image provider returned an invalid response.") from error
+    if not image_bytes or len(image_bytes) > IMAGE_MAX_BYTES or not is_supported_image(image_bytes, "image/png"):
+        raise ImageGenerationError("Image provider returned an invalid response.")
+    return image_bytes, "image/png"
+
+
+def image_error_response(message: str, status: int, request_id: str):
+    response = jsonify({"error": message})
+    response.status_code = status
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
+def log_image_outcome(*, request_id: str, status: int, outcome: str, started_at: float, error: Exception | None = None) -> None:
+    """Record only safe diagnostic metadata for image requests."""
+    app.logger.warning(
+        "image_generation_request outcome=%s request_id=%s status=%s error_type=%s duration_ms=%s",
+        outcome,
+        request_id,
+        status,
+        type(error).__name__ if error else "none",
+        round((time.perf_counter() - started_at) * 1000),
+    )
 
 
 def get_model_response(
@@ -345,6 +429,40 @@ def text_visualizer():
 @app.route('/hallucination-path')
 def hallucination_path():
     return render_template('hallucination-path.html')
+
+
+@app.route('/image-visualizer')
+def image_visualizer():
+    return render_template('image-visualizer.html')
+
+
+@app.route('/api/generate-image', methods=['POST'])
+def generate_image():
+    request_id = str(uuid.uuid4())
+    started_at = time.perf_counter()
+    try:
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            raise ValueError("Image prompt request must be a JSON object.")
+        prompt = data.get("prompt")
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise ValueError("Image prompt is required.")
+        image_bytes, mime_type = request_remote_image(prompt.strip())
+        response = Response(image_bytes, mimetype=mime_type)
+        response.headers["X-Request-ID"] = request_id
+        response.headers["Cache-Control"] = "no-store"
+        log_image_outcome(request_id=request_id, status=200, outcome="success", started_at=started_at)
+        return response
+    except ValueError as error:
+        log_image_outcome(request_id=request_id, status=400, outcome="handled_error", started_at=started_at, error=error)
+        return image_error_response(str(error), 400, request_id)
+    except ImageGenerationError as error:
+        status = 503 if str(error) == "Image generation is not configured on the server." else 502
+        log_image_outcome(request_id=request_id, status=status, outcome="handled_error", started_at=started_at, error=error)
+        return image_error_response(str(error), status, request_id)
+    except Exception as error:
+        log_image_outcome(request_id=request_id, status=502, outcome="unexpected_error", started_at=started_at, error=error)
+        return image_error_response("Image generation is temporarily unavailable.", 502, request_id)
 
 
 @app.route('/api/generate', methods=['POST'])

@@ -14,6 +14,34 @@
             languageLabel: 'Language', appTitle: 'Probability Visualizer', homeIntro: 'Choose how you want to explore how a model constructs text.', modesLabel: 'Visualization modes', tokenMode: 'Visualize token', tokenModeDescription: 'Observe the next word, its tokens, and the probability of each choice.', textMode: 'Visualize text', textModeDescription: 'See a complete response constructed token by token.', hallucinationPathMode: 'Hallucination Path', hallucinationPathModeDescription: 'Choose each next token and see plausible paths emerge from a false premise.', start: 'Start →', backHome: '← Back to home', tokenTitle: 'Visualize token', tokenIntro: 'Enter some context to observe how the next word is constructed token by token.', textTitle: 'Visualize text', textIntro: 'Ask a question or give an instruction to explore how a response is constructed token by token.', hallucinationPathTitle: 'Hallucination Path', hallucinationPathIntro: 'Start with a false factual statement and choose, step by step, how the text continues.', hallucinationPathGuidance: 'This experiment shows linguistically plausible continuations, not fact checking.', hallucinationPathWarning: 'You must provide a false or misleading premise. The system does not confirm whether it is false.', falsePremiseLabel: 'False factual statement', hallucinationPathPlaceholder: 'Example: The capital of Australia is Sydney because...', startPath: 'Start path', activePath: 'Active path', pathEmpty: 'Start with a statement to see the path here.', finishPath: 'Finish exploration', pathFinished: 'Exploration finished. This screen does not classify the text as true or false.', nextTokenChoices: 'Choose the next token', pathTree: 'Path tree', pathTreeNote: 'Select an earlier node to resume from that point and create another branch.', enterFalsePremise: 'Enter a false or misleading statement to continue.', loadingChoices: 'Loading candidates...', noCandidates: 'Could not get candidates for this step.', tokenizedContext: 'Tokenized context', tokenizedQuestion: 'Tokenized question or instruction', tokenizedResponse: 'Tokenized response', nextToken: 'Next token', contextBefore: 'Context before the choice:', tokenColumn: 'Token', probabilityColumn: 'Probability', tokenNote: 'Send some context to view candidates. The table shows only the most likely tokens.', textNote: 'Send an instruction to view candidates for each response token.', tokenPlaceholder: 'Enter context here...', textPlaceholder: 'Example: Write a birthday message for my father', generate: 'Generate', generateText: 'Generate text', enterPrompt: 'Enter text to continue.', generating: 'Generating...', generatingResponse: 'Generating response...', generationError: 'Error generating the response. Check the server configuration and try again.', staticDemoTitle: 'GitHub Pages demo mode', staticDemoDescription: 'This is a static demonstration. To generate with the API, clone the repository and run it locally.', loadTextDemo: 'Load text example', weatherDemo: 'Weather example', mlDemo: 'ML example', originalDemo: 'Original example', staticDemoAlert: 'This is a static demonstration published on GitHub Pages. To use live generation, run the Flask application locally with server configuration. In the meantime, try the demonstration examples above.'
         }
     };
+    Object.assign(translations['pt-BR'], {
+        imageVisualizerMode: 'Image Visualizer',
+        imageVisualizerModeDescription: 'Gere, visualize e baixe uma imagem a partir de uma descrição.',
+        imageVisualizerTitle: 'Image Visualizer',
+        imageVisualizerIntro: 'Descreva a imagem que deseja gerar.',
+        imagePromptLabel: 'Descrição da imagem',
+        imagePromptPlaceholder: 'Ex.: Uma cidade futurista ao pôr do sol',
+        generateImage: 'Gerar imagem',
+        imageGenerating: 'Gerando imagem...',
+        imageGenerationError: 'Não foi possível gerar a imagem. Tente novamente.',
+        imagePromptRequired: 'Digite uma descrição para continuar.',
+        generatedImageAlt: 'Imagem gerada',
+        downloadImage: 'Baixar imagem',
+    });
+    Object.assign(translations.en, {
+        imageVisualizerMode: 'Image Visualizer',
+        imageVisualizerModeDescription: 'Generate, view, and download an image from a description.',
+        imageVisualizerTitle: 'Image Visualizer',
+        imageVisualizerIntro: 'Describe the image you want to generate.',
+        imagePromptLabel: 'Image description',
+        imagePromptPlaceholder: 'Example: A futuristic city at sunset',
+        generateImage: 'Generate image',
+        imageGenerating: 'Generating image...',
+        imageGenerationError: 'The image could not be generated. Try again.',
+        imagePromptRequired: 'Enter a description to continue.',
+        generatedImageAlt: 'Generated image',
+        downloadImage: 'Download image',
+    });
     function normalizeLocale(value) { return SUPPORTED_LOCALES.has(value) ? value : DEFAULT_LOCALE; }
     function getLocale() { return normalizeLocale(localStorage.getItem(STORAGE_KEY)); }
     function t(key) { return translations[getLocale()][key] || fallbackTranslations[getLocale()][key] || key; }

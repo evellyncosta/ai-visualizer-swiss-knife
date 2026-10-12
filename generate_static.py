@@ -21,6 +21,7 @@ def generate_static_site():
         "/tokens": "tokens.html",
         "/text": "text.html",
         "/hallucination-path": "hallucination-path.html",
+        "/image-visualizer": "image-visualizer.html",
     }
     with app.test_client() as client:
         for route, filename in pages.items():
@@ -34,6 +35,7 @@ def generate_static_site():
             html_content = html_content.replace('href="/tokens"', 'href="tokens.html"')
             html_content = html_content.replace('href="/text"', 'href="text.html"')
             html_content = html_content.replace('href="/hallucination-path"', 'href="hallucination-path.html"')
+            html_content = html_content.replace('href="/image-visualizer"', 'href="image-visualizer.html"')
             html_content = html_content.replace('href="/"', 'href="index.html"')
             html_content = html_content.replace('src="static/script.js"', 'src="static/script-static.js"')
             html_content = html_content.replace('data-generation-mode="path"', 'data-generation-mode="path" data-static-demo="true"')
