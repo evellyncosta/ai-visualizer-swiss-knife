@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, Response
 from flask_cors import CORS
 from io import BytesIO
+import base64
 import os
 import math
 import re
@@ -10,6 +11,7 @@ import json
 from typing import Dict, List, Tuple
 from PIL import Image, UnidentifiedImageError
 from huggingface_hub import InferenceClient, InferenceTimeoutError
+from huggingface_hub.inference._common import RequestParameters
 from huggingface_hub.utils import HfHubHTTPError
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
@@ -62,12 +64,17 @@ RUNTIME_ERROR_CODES = {
     "OpenAI did not return a verification message.": "verification_message_missing",
 }
 IMAGE_MAX_BYTES = 10 * 1024 * 1024
+CAPTURE_MAX_BYTES = 64 * 1024 * 1024
 IMAGE_TIMEOUT_SECONDS = 30
 IMAGE_MIME_TYPES = {"image/png": ".png", "image/jpeg": ".jpg"}
 
 
 class ImageGenerationError(RuntimeError):
     """A safe, user-facing failure at the image provider boundary."""
+
+    def __init__(self, message: str, code: str | None = None):
+        super().__init__(message)
+        self.code = code
 
 
 def get_image_endpoint_configuration() -> Tuple[str, str | None]:
@@ -88,6 +95,29 @@ def get_image_timeout_seconds() -> float:
     return timeout
 
 
+def get_safe_hugging_face_error(error: HfHubHTTPError | InferenceTimeoutError | TimeoutError | OSError, *, endpoint: str, token: str | None, prompt: str) -> Tuple[str, str | None]:
+    """Keep the provider's error contract while stripping server-only values."""
+    message = str(error).strip()
+    code = None
+    response = getattr(error, "response", None)
+    if response is not None:
+        try:
+            payload = response.json()
+        except (ValueError, TypeError):
+            payload = None
+        if isinstance(payload, dict):
+            if isinstance(payload.get("error"), str) and payload["error"].strip():
+                message = payload["error"].strip()
+            if isinstance(payload.get("code"), str) and re.fullmatch(r"[A-Z0-9_]{1,64}", payload["code"]):
+                code = payload["code"]
+    for secret in (endpoint, token, prompt):
+        if secret:
+            message = message.replace(secret, "[redacted]")
+    message = re.sub(r"https?://\S+", "[redacted]", message)
+    message = re.sub(r"(?i)bearer\s+\S+", "Bearer [redacted]", message)
+    return message or "Image generation is temporarily unavailable.", code
+
+
 def is_supported_image(image_bytes: bytes, mime_type: str) -> bool:
     expected_format = "PNG" if mime_type == "image/png" else "JPEG"
     try:
@@ -100,32 +130,141 @@ def is_supported_image(image_bytes: bytes, mime_type: str) -> bool:
     return True
 
 
+def image_request_headers(token: str | None, accept: str) -> Dict[str, str]:
+    headers = {"Accept": accept}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def create_image_client(endpoint: str, token: str | None, accept: str) -> InferenceClient:
+    return InferenceClient(
+        model=endpoint,
+        token=token,
+        timeout=get_image_timeout_seconds(),
+        headers=image_request_headers(token, accept),
+    )
+
+
+def post_image_request(
+    client: InferenceClient, endpoint: str, payload: Dict, token: str | None, accept: str
+) -> bytes:
+    return client._inner_post(RequestParameters(
+        url=endpoint,
+        task="text-to-image",
+        model=endpoint,
+        json=payload,
+        data=None,
+        headers=image_request_headers(token, accept),
+    ))
+
+
 def request_remote_image(prompt: str) -> Tuple[bytes, str]:
     endpoint, token = get_image_endpoint_configuration()
     try:
-        client = InferenceClient(
-            model=endpoint,
-            token=token,
-            timeout=get_image_timeout_seconds(),
-        )
-        generated_image = client.text_to_image(prompt)
+        client = create_image_client(endpoint, token, "image/png")
+        image_bytes = post_image_request(client, endpoint, {"inputs": prompt}, token, "image/png")
     except (InferenceTimeoutError, HfHubHTTPError, TimeoutError, OSError) as error:
-        raise ImageGenerationError("Image generation is temporarily unavailable.") from error
-    if not isinstance(generated_image, Image.Image):
-        raise ImageGenerationError("Image provider returned an invalid response.")
-    try:
-        output = BytesIO()
-        generated_image.save(output, format="PNG")
-        image_bytes = output.getvalue()
-    except (OSError, ValueError) as error:
-        raise ImageGenerationError("Image provider returned an invalid response.") from error
-    if not image_bytes or len(image_bytes) > IMAGE_MAX_BYTES or not is_supported_image(image_bytes, "image/png"):
+        message, code = get_safe_hugging_face_error(
+            error, endpoint=endpoint, token=token, prompt=prompt
+        )
+        raise ImageGenerationError(message, code) from error
+    if (
+        not isinstance(image_bytes, bytes)
+        or not image_bytes
+        or len(image_bytes) > IMAGE_MAX_BYTES
+        or not is_supported_image(image_bytes, "image/png")
+    ):
         raise ImageGenerationError("Image provider returned an invalid response.")
     return image_bytes, "image/png"
 
 
-def image_error_response(message: str, status: int, request_id: str):
-    response = jsonify({"error": message})
+def decode_capture_png(png_base64: object) -> str:
+    if not isinstance(png_base64, str) or not png_base64:
+        raise ImageGenerationError("Image provider returned an invalid capture response.")
+    try:
+        image_bytes = base64.b64decode(png_base64, validate=True)
+    except (ValueError, TypeError) as error:
+        raise ImageGenerationError("Image provider returned an invalid capture response.") from error
+    if not image_bytes or len(image_bytes) > IMAGE_MAX_BYTES or not is_supported_image(image_bytes, "image/png"):
+        raise ImageGenerationError("Image provider returned an invalid capture response.")
+    return png_base64
+
+
+def validate_capture_response(response_bytes: object) -> Dict:
+    if not isinstance(response_bytes, bytes) or not response_bytes or len(response_bytes) > CAPTURE_MAX_BYTES:
+        raise ImageGenerationError("Image provider returned an invalid capture response.")
+    try:
+        payload = json.loads(response_bytes)
+    except (TypeError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ImageGenerationError("Image provider returned an invalid capture response.") from error
+    if not isinstance(payload, dict):
+        raise ImageGenerationError("Image provider returned an invalid capture response.")
+    prompt = payload.get("prompt")
+    num_inference_steps = payload.get("num_inference_steps")
+    captured_steps = payload.get("captured_steps")
+    if (
+        not isinstance(prompt, str)
+        or isinstance(num_inference_steps, bool)
+        or not isinstance(num_inference_steps, int)
+        or num_inference_steps < 1
+        or not isinstance(captured_steps, list)
+    ):
+        raise ImageGenerationError("Image provider returned an invalid capture response.")
+    validated_steps = []
+    for captured_step in captured_steps:
+        if not isinstance(captured_step, dict):
+            raise ImageGenerationError("Image provider returned an invalid capture response.")
+        step = captured_step.get("step")
+        timestep = captured_step.get("timestep")
+        if (
+            isinstance(step, bool)
+            or not isinstance(step, int)
+            or step < 0
+            or isinstance(timestep, bool)
+            or not isinstance(timestep, int)
+        ):
+            raise ImageGenerationError("Image provider returned an invalid capture response.")
+        validated_steps.append({
+            "step": step,
+            "timestep": timestep,
+            "png_base64": decode_capture_png(captured_step.get("png_base64")),
+        })
+    return {
+        "prompt": prompt,
+        "num_inference_steps": num_inference_steps,
+        "captured_steps": validated_steps,
+        "final_image_png_base64": decode_capture_png(payload.get("final_image_png_base64")),
+    }
+
+
+def request_remote_capture(prompt: str, capture_every: int) -> Dict:
+    endpoint, token = get_image_endpoint_configuration()
+    try:
+        client = create_image_client(endpoint, token, "application/json")
+        response_bytes = post_image_request(
+            client,
+            endpoint,
+            {
+                "inputs": prompt,
+                "parameters": {"capture_steps": True, "capture_every": capture_every},
+            },
+            token,
+            "application/json",
+        )
+    except (InferenceTimeoutError, HfHubHTTPError, TimeoutError, OSError) as error:
+        message, code = get_safe_hugging_face_error(
+            error, endpoint=endpoint, token=token, prompt=prompt
+        )
+        raise ImageGenerationError(message, code) from error
+    return validate_capture_response(response_bytes)
+
+
+def image_error_response(message: str, status: int, request_id: str, code: str | None = None):
+    payload = {"error": message}
+    if code:
+        payload["code"] = code
+    response = jsonify(payload)
     response.status_code = status
     response.headers["X-Request-ID"] = request_id
     return response
@@ -447,8 +586,21 @@ def generate_image():
         prompt = data.get("prompt")
         if not isinstance(prompt, str) or not prompt.strip():
             raise ValueError("Image prompt is required.")
-        image_bytes, mime_type = request_remote_image(prompt.strip())
-        response = Response(image_bytes, mimetype=mime_type)
+        capture_steps = data.get("capture_steps", False)
+        if not isinstance(capture_steps, bool):
+            raise ValueError("Image capture_steps must be a boolean.")
+        if capture_steps:
+            capture_every = data.get("capture_every")
+            if (
+                isinstance(capture_every, bool)
+                or not isinstance(capture_every, int)
+                or capture_every <= 0
+            ):
+                raise ValueError("Image capture_every must be a positive integer when capture is enabled.")
+            response = jsonify(request_remote_capture(prompt.strip(), capture_every))
+        else:
+            image_bytes, mime_type = request_remote_image(prompt.strip())
+            response = Response(image_bytes, mimetype=mime_type)
         response.headers["X-Request-ID"] = request_id
         response.headers["Cache-Control"] = "no-store"
         log_image_outcome(request_id=request_id, status=200, outcome="success", started_at=started_at)
@@ -459,7 +611,7 @@ def generate_image():
     except ImageGenerationError as error:
         status = 503 if str(error) == "Image generation is not configured on the server." else 502
         log_image_outcome(request_id=request_id, status=status, outcome="handled_error", started_at=started_at, error=error)
-        return image_error_response(str(error), status, request_id)
+        return image_error_response(str(error), status, request_id, error.code)
     except Exception as error:
         log_image_outcome(request_id=request_id, status=502, outcome="unexpected_error", started_at=started_at, error=error)
         return image_error_response("Image generation is temporarily unavailable.", 502, request_id)

@@ -1,5 +1,6 @@
 import os
 import json
+import base64
 from PIL import Image
 import shutil
 import tempfile
@@ -13,11 +14,14 @@ from unittest.mock import MagicMock, patch
 import yaml
 
 from app import (
+    CAPTURE_MAX_BYTES,
+    ImageGenerationError,
     MODEL_NAME,
     VERIFICATION_MODEL_NAME,
     app,
     get_generation_error_code,
     tokenize_prompt,
+    validate_capture_response,
 )
 from prompts import (
     MAX_PATH_TOKENS,
@@ -627,6 +631,18 @@ class ImageGenerationRouteTests(TestCase):
     def setUp(self):
         self.client = app.test_client()
 
+    @staticmethod
+    def capture_response():
+        output = __import__("io").BytesIO()
+        Image.new("RGB", (1, 1), "red").save(output, format="PNG")
+        png_base64 = base64.b64encode(output.getvalue()).decode()
+        return {
+            "prompt": "a fox",
+            "num_inference_steps": 50,
+            "captured_steps": [{"step": 0, "timestep": 999, "png_base64": png_base64}],
+            "final_image_png_base64": png_base64,
+        }
+
     def test_missing_configuration_is_safe(self):
         with patch.dict(os.environ, {}, clear=True):
             response = self.client.post("/api/generate-image", json={"prompt": "a private prompt"})
@@ -637,16 +653,23 @@ class ImageGenerationRouteTests(TestCase):
     @patch("app.OpenAI")
     @patch("app.ChatOpenAI")
     def test_forwards_only_prompt_to_inference_client(self, chat_openai, openai, inference_client):
-        inference_client.return_value.text_to_image.return_value = Image.new("RGB", (1, 1), "red")
+        output = __import__("io").BytesIO()
+        Image.new("RGB", (1, 1), "red").save(output, format="PNG")
+        inference_client.return_value._inner_post.return_value = output.getvalue()
         with patch.dict(os.environ, {"HF_IMAGE_ENDPOINT_URL": "https://images.internal/generate", "HF_TOKEN": "token"}, clear=True):
             response = self.client.post("/api/generate-image", json={"prompt": "a fox"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.mimetype, "image/png")
         self.assertTrue(response.data.startswith(b"\x89PNG"))
         inference_client.assert_called_once_with(
-            model="https://images.internal/generate", token="token", timeout=30.0
+            model="https://images.internal/generate", token="token", timeout=30.0,
+            headers={"Accept": "image/png", "Authorization": "Bearer token"},
         )
-        inference_client.return_value.text_to_image.assert_called_once_with("a fox")
+        request_parameters = inference_client.return_value._inner_post.call_args.args[0]
+        self.assertEqual(request_parameters.url, "https://images.internal/generate")
+        self.assertEqual(request_parameters.json, {"inputs": "a fox"})
+        self.assertEqual(request_parameters.headers["Accept"], "image/png")
+        self.assertEqual(request_parameters.headers["Authorization"], "Bearer token")
         chat_openai.assert_not_called()
         openai.assert_not_called()
 
@@ -654,7 +677,7 @@ class ImageGenerationRouteTests(TestCase):
     def test_invalid_provider_results_are_rejected_without_secrets(self, inference_client):
         secret = "HF_TOKEN=secret-token"
         prompt = "PROMPT_MUST_NOT_APPEAR"
-        inference_client.return_value.text_to_image.return_value = object()
+        inference_client.return_value._inner_post.return_value = object()
         with self.assertLogs(app.logger, level="WARNING") as logs:
             with patch.dict(os.environ, {"HF_IMAGE_ENDPOINT_URL": "https://private.example/image", "HF_TOKEN": secret}, clear=True):
                 response = self.client.post("/api/generate-image", json={"prompt": prompt})
@@ -667,27 +690,97 @@ class ImageGenerationRouteTests(TestCase):
 
     @patch("app.InferenceClient")
     def test_timeout_is_sanitized(self, inference_client):
-        inference_client.return_value.text_to_image.side_effect = __import__("app").InferenceTimeoutError("timeout")
+        inference_client.return_value._inner_post.side_effect = __import__("app").InferenceTimeoutError("timeout")
         with patch.dict(os.environ, {"HF_IMAGE_ENDPOINT_URL": "https://images.internal/generate"}, clear=True):
             response = self.client.post("/api/generate-image", json={"prompt": "a fox"})
         self.assertEqual(response.status_code, 502)
-        self.assertEqual(response.get_json(), {"error": "Image generation is temporarily unavailable."})
+        self.assertEqual(response.get_json(), {"error": "timeout"})
 
     @patch("app.InferenceClient")
     def test_provider_rejection_is_sanitized(self, inference_client):
         secret = "https://private.example/endpoint?token=secret"
-        inference_client.return_value.text_to_image.side_effect = __import__("app").HfHubHTTPError(secret)
+        prompt = "private prompt"
+        provider_response = MagicMock()
+        provider_response.json.return_value = {
+            "error": "Bad Request: The endpoint is paused, ask a maintainer to restart it",
+            "code": "BAD_REQUEST",
+        }
+        inference_client.return_value._inner_post.side_effect = __import__("app").HfHubHTTPError(
+            secret, response=provider_response
+        )
         with self.assertLogs(app.logger, level="WARNING") as logs:
             with patch.dict(os.environ, {"HF_IMAGE_ENDPOINT_URL": "https://private.example/endpoint"}, clear=True):
-                response = self.client.post("/api/generate-image", json={"prompt": "private prompt"})
+                response = self.client.post("/api/generate-image", json={"prompt": prompt})
         self.assertEqual(response.status_code, 502)
-        self.assertEqual(response.get_json(), {"error": "Image generation is temporarily unavailable."})
-        self.assertNotIn(secret, "\n".join(logs.output))
+        self.assertEqual(response.get_json(), {
+            "error": "Bad Request: The endpoint is paused, ask a maintainer to restart it",
+            "code": "BAD_REQUEST",
+        })
+        record = "\n".join(logs.output)
+        self.assertNotIn(secret, record)
+        self.assertNotIn(prompt, record)
 
     @patch("app.InferenceClient")
     def test_rejects_non_image_results(self, inference_client):
         with patch.dict(os.environ, {"HF_IMAGE_ENDPOINT_URL": "https://images.internal/generate"}, clear=True):
-            inference_client.return_value.text_to_image.return_value = "not an image"
+            inference_client.return_value._inner_post.return_value = "not an image"
             response = self.client.post("/api/generate-image", json={"prompt": "a fox"})
         self.assertEqual(response.status_code, 502)
         self.assertEqual(response.get_json(), {"error": "Image provider returned an invalid response."})
+
+    def test_capture_requires_a_positive_integer_interval(self):
+        invalid_values = ({}, {"capture_every": 0}, {"capture_every": True}, {"capture_every": 1.5})
+        for extra in invalid_values:
+            with self.subTest(extra=extra):
+                response = self.client.post(
+                    "/api/generate-image", json={"prompt": "a fox", "capture_steps": True, **extra}
+                )
+                self.assertEqual(response.status_code, 400)
+        response = self.client.post(
+            "/api/generate-image", json={"prompt": "a fox", "capture_steps": "true"}
+        )
+        self.assertEqual(response.status_code, 400)
+
+    @patch("app.InferenceClient")
+    def test_capture_forwards_json_contract_and_preserves_frames(self, inference_client):
+        capture = self.capture_response()
+        inference_client.return_value._inner_post.return_value = json.dumps(capture).encode()
+        with patch.dict(os.environ, {"HF_IMAGE_ENDPOINT_URL": "https://images.internal/generate", "HF_TOKEN": "token"}, clear=True):
+            response = self.client.post(
+                "/api/generate-image",
+                json={"prompt": "a fox", "capture_steps": True, "capture_every": 10},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "application/json")
+        self.assertEqual(response.get_json(), capture)
+        inference_client.assert_called_once_with(
+            model="https://images.internal/generate", token="token", timeout=30.0,
+            headers={"Accept": "application/json", "Authorization": "Bearer token"},
+        )
+        request_parameters = inference_client.return_value._inner_post.call_args.args[0]
+        self.assertEqual(request_parameters.url, "https://images.internal/generate")
+        self.assertEqual(request_parameters.headers["Accept"], "application/json")
+        self.assertEqual(request_parameters.headers["Authorization"], "Bearer token")
+        self.assertEqual(request_parameters.json, {
+            "inputs": "a fox",
+            "parameters": {"capture_steps": True, "capture_every": 10},
+        })
+
+    @patch("app.InferenceClient")
+    def test_invalid_capture_response_is_rejected(self, inference_client):
+        invalid_capture = self.capture_response()
+        invalid_capture["captured_steps"][0]["png_base64"] = "not-base64"
+        for response_bytes in (b"not-json", json.dumps({}).encode(), json.dumps(invalid_capture).encode()):
+            with self.subTest(response_bytes=response_bytes):
+                inference_client.return_value._inner_post.return_value = response_bytes
+                with patch.dict(os.environ, {"HF_IMAGE_ENDPOINT_URL": "https://images.internal/generate"}, clear=True):
+                    response = self.client.post(
+                        "/api/generate-image",
+                        json={"prompt": "a fox", "capture_steps": True, "capture_every": 1},
+                    )
+                self.assertEqual(response.status_code, 502)
+                self.assertEqual(response.get_json(), {"error": "Image provider returned an invalid capture response."})
+
+    def test_capture_response_above_limit_is_rejected(self):
+        with self.assertRaises(ImageGenerationError):
+            validate_capture_response(b"x" * (CAPTURE_MAX_BYTES + 1))

@@ -33,9 +33,40 @@ For live token probability analysis with OpenAI:
    ```
    Edit `.env` and set `OPENAI_API_KEY` to your OpenAI API key. This key stays on the server and is never entered in the browser.
 
-   To enable Image Visualizer, also set `HF_IMAGE_ENDPOINT_URL` to the deployed Hugging Face Inference Endpoint URL and, when required, `HF_TOKEN`. The server uses `huggingface_hub.InferenceClient.text_to_image()` and returns the generated image as PNG to the browser.
+   To enable Image Visualizer, also set `HF_IMAGE_ENDPOINT_URL` to the deployed Hugging Face Inference Endpoint URL and, when required, `HF_TOKEN`. The server uses the configured `huggingface_hub.InferenceClient` boundary and returns the generated image as PNG to the browser.
+
+   When Hugging Face rejects a request, the API returns its diagnostic contract as JSON, preserving the provider message and optional code:
+
+   ```json
+   { "error": "Bad Request: The endpoint is paused, ask a maintainer to restart it", "code": "BAD_REQUEST" }
+   ```
+
+   Server endpoint URLs, tokens, and submitted prompts are redacted from those errors.
 
    `HF_IMAGE_ENDPOINT_URL`, `HF_TOKEN`, and all provider credentials must remain in server environment configuration; never put them in browser JavaScript, static-site configuration, or client requests.
+
+   The Image Visualizer keeps denoising capture disabled by default. A normal generation sends the conventional request below and receives binary PNG:
+
+   ```http
+   POST /
+   Content-Type: application/json
+   Accept: image/png
+   ```
+
+   ```json
+   { "inputs": "uma paisagem futurista" }
+   ```
+
+   When capture is enabled, the server sends `Accept: application/json` to the same endpoint:
+
+   ```json
+   {
+     "inputs": "uma paisagem futurista",
+     "parameters": { "capture_steps": true, "capture_every": 10 }
+   }
+   ```
+
+   The capture response contains `prompt`, `num_inference_steps`, ordered `captured_steps` entries (`step`, `timestep`, `png_base64`), and `final_image_png_base64`. The application validates the full response and displays the final image; it does not stream, persist, or yet provide navigation between intermediate frames.
 
 4. **Run the Flask app**
    ```bash

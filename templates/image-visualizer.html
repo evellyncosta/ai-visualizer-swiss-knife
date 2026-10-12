@@ -21,6 +21,14 @@
             <section class="image-input-section">
                 <label for="image-prompt-input" data-i18n="imagePromptLabel">Descrição da imagem</label>
                 <textarea id="image-prompt-input" rows="5" data-i18n-placeholder="imagePromptPlaceholder" placeholder="Ex.: Uma cidade futurista ao pôr do sol"></textarea>
+                <label class="image-capture-toggle" for="capture-steps-input">
+                    <input id="capture-steps-input" type="checkbox" />
+                    <span data-i18n="captureStepsLabel">Capturar etapas de denoising</span>
+                </label>
+                <div id="capture-settings" class="image-capture-settings" hidden>
+                    <label for="capture-every-input" data-i18n="captureEveryLabel">Capturar a cada quantas etapas</label>
+                    <input id="capture-every-input" type="number" min="1" step="1" value="10" inputmode="numeric" />
+                </div>
                 <button id="generate-image-btn" type="button" data-i18n="generateImage">Gerar imagem</button>
                 <p id="image-status" class="image-status" aria-live="polite"></p>
             </section>

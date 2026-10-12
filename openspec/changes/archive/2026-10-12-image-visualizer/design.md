@@ -39,7 +39,7 @@ URLs assinadas e armazenamento de objetos foram descartados desta fase porque in
 
 ### Falhas e limites seguros
 
-Prompts vazios serão rejeitados antes da chamada remota. Configuração ausente, timeout, exceções do `InferenceClient` e payload inválido serão mapeados a mensagens seguras. Logs conterão apenas metadados de diagnóstico aprovados, nunca prompt, Base64, URL interna ou token.
+Prompts vazios serão rejeitados antes da chamada remota. Configuração ausente e payload inválido serão mapeados a mensagens seguras. As mensagens de erro do Hugging Face serão devolvidas ao navegador para diagnóstico, com URL interna, token e prompt removidos. Logs conterão apenas metadados de diagnóstico aprovados, nunca prompt, Base64, URL interna ou token.
 
 ## Risks / Trade-offs
 

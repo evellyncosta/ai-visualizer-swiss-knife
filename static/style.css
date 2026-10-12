@@ -141,6 +141,11 @@ body {
 .image-input-section label { color: #e2e8f0; font-weight: 600; }
 #image-prompt-input { background: #16213e; border: 1px solid #2d3748; border-radius: 8px; color: #fff; font: inherit; padding: 12px; resize: vertical; }
 #image-prompt-input:focus { border-color: #667eea; outline: none; }
+.image-capture-toggle { align-items: center; cursor: pointer; display: flex; gap: 8px; width: fit-content; }
+.image-capture-toggle input { accent-color: #667eea; height: 1.1rem; width: 1.1rem; }
+.image-capture-settings { display: grid; gap: 8px; max-width: 260px; }
+#capture-every-input { background: #16213e; border: 1px solid #2d3748; border-radius: 8px; color: #fff; font: inherit; padding: 10px; }
+#capture-every-input:focus { border-color: #667eea; outline: none; }
 #generate-image-btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: 0; border-radius: 8px; color: #fff; cursor: pointer; font: inherit; font-weight: 600; padding: 12px 24px; width: fit-content; }
 #generate-image-btn:disabled { cursor: not-allowed; opacity: 0.6; }
 .image-status { color: #a0aec0; min-height: 1.5em; }

@@ -28,7 +28,7 @@ O sistema SHALL encaminhar um prompt válido a um endpoint remoto de inferência
 
 #### Scenario: Falha do endpoint remoto
 - **WHEN** o endpoint remoto recusa, expira ou devolve uma resposta inválida
-- **THEN** o sistema SHALL informar uma falha compreensível sem expor a URL remota, tokens de acesso ou detalhes sensíveis do provedor
+- **THEN** o sistema SHALL informar o contrato de erro do Hugging Face (`error` e, quando presente, `code`), removendo URL remota, tokens de acesso, prompt e outros detalhes sensíveis
 
 ### Requirement: Resposta de imagem do InferenceClient
 O sistema SHALL aceitar a imagem retornada por `InferenceClient.text_to_image`, SHALL validá-la e SHALL disponibilizar a imagem resultante ao navegador sem persistir o arquivo no servidor da aplicação.

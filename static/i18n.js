@@ -25,6 +25,9 @@
         imageGenerating: 'Gerando imagem...',
         imageGenerationError: 'Não foi possível gerar a imagem. Tente novamente.',
         imagePromptRequired: 'Digite uma descrição para continuar.',
+        captureStepsLabel: 'Capturar etapas de denoising',
+        captureEveryLabel: 'Capturar a cada quantas etapas',
+        captureEveryInvalid: 'Informe um intervalo de captura positivo.',
         generatedImageAlt: 'Imagem gerada',
         downloadImage: 'Baixar imagem',
     });
@@ -39,6 +42,9 @@
         imageGenerating: 'Generating image...',
         imageGenerationError: 'The image could not be generated. Try again.',
         imagePromptRequired: 'Enter a description to continue.',
+        captureStepsLabel: 'Capture denoising steps',
+        captureEveryLabel: 'Capture every how many steps',
+        captureEveryInvalid: 'Enter a positive capture interval.',
         generatedImageAlt: 'Generated image',
         downloadImage: 'Download image',
     });
